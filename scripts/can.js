@@ -25,7 +25,7 @@ function can(x, y, vx, vy, va) {
 	
 	this.update = function() {
 		this.x += this.vx;
-		this.vy += 0.1;
+		this.vy += G;
 		this.y += this.vy;
 		this.a += this.va;
 	}

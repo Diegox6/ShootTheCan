@@ -6,15 +6,30 @@ var interval;
 
 var debugUI = false;
 
-var cans = [new can(500, 10000/16, 0, -10, 0.05)];
+var G = 0.1;
+var c;
 
-var fireDelay = 0;
+var fireDelay;
 var maxFireDelay = 10;
 var triggerReleased = true;
 
-var score = 0;
+var score;
 
-// ## INIT GAME ##
+var mouseOut;
+
+// ## GAME STATE ##
+// - 0: Wait for start
+// - 1: Playing
+// - 2: Game over
+
+const gameStates = {
+	WAIT: 0,
+	PLAYING: 1,
+	GAMEOVER: 2
+};
+var gameState = 0;
+
+// ## INIT CANVAS ##
 
 function start() {
 	canvas = document.getElementById("frame");
@@ -34,103 +49,111 @@ function start() {
 
 	g = canvas.getContext("2d");
 	interval = setInterval(update, 20);
+	
+}
+
+// ## INIT GAME ##
+
+function startGame() {
+	gameState = gameStates.PLAYING;
+	score = 0;
+	fireDelay = maxFireDelay;
+	
+	var canX = random(-width/2, width/2);
+	var canY = height +	20;
+	var canVY = -Math.sqrt((canY-random(height/2, 50))*2*G);
+	var canVX = G*canX/canVY;
+	
+	c = new can(canX + width/2, canY, canVX, canVY, 0.05);
+}
+
+// ## GAME OVER	 ##
+
+function gameOver() {
+	gameState = gameStates.GAMEOVER;
 }
 
 // ## UPDATE AND RENDER ##
 
 function update() {
+	mouseOut = mouse.x < 0 || mouse.x > width || mouse.y < 0 || mouse.y > height;
 	render();
-	cans.forEach(function(e) {e.update()});
-	if (isKeyPressed(68)) debugUI = !debugUI;
-	clearKeyInput();
+	
+	if (gameState == gameStates.WAIT || gameState == gameStates.GAMEOVER){
+		document.body.style.cursor = "auto";
+		if (mouse.click == 0 && !mouseOut) startGame();
+	} else if (gameState == gameStates.PLAYING) {
+		document.body.style.cursor = "none";
+		c.update();
+		if (c.y > height + 30) gameOver();
+		
+		if (isKeyPressed(68)) debugUI = !debugUI;
+		clearKeyInput();
+		
+		if (mouse.click == 0 && triggerReleased && !mouseOut && fireDelay <= 0) {
+			shoot();
+			triggerReleased = false;
+		}
+		if (fireDelay > 0) fireDelay--;
+		if (mouse.click != 0) triggerReleased = true;
+	}
 }
 
 function render() {
 	background("#CCC");
 	
-	g.font = "50px Consolas";
-	g.fillStyle = "#222222"
-	g.fillText(score, 500 - String(score).visualLength()*50/32, 500/8*5)
-	
-	cans.forEach(function(e) {e.show()});
-	
-	g.drawImage(sprite("res/img/crosshair.png"), mouse.x - 8, mouse.y - 8);
-	//g.fillStyle = "#000000";
-	//g.fillRect(mouse.x, mouse.y, 1, 1);
-	
-	if (mouse.click == 0 && triggerReleased && fireDelay <= 0) {
-		shoot();
-		triggerReleased = false;
+	if (gameState == gameStates.PLAYING) {
+		g.font = "50px Consolas";
+		g.fillStyle = "#222222";
+		g.fillText(score, 500 - String(score).visualLength()*50/32, 500/8*5);
+		
+		c.show();
+		
+		g.drawImage(sprite("res/img/crosshair.png"), mouse.x - 8, mouse.y - 8);
+		
+		if (debugUI) {
+			g.fillStyle = "#444"
+			g.font = "10px Consolas";
+			g.fillText("KeyHeld: " + (heldKeys.length > 0 ? heldKeys : "none"), 5, 10);
+			g.fillText("MouseClick: " + (mouse.click != -1 ? mouse.click : "none"), 5, 20);
+			g.fillText("MousePos: " + mouse.x + " - " + mouse.y, 5, 30);
+			g.fillText("FireDelay: " + fireDelay, 5, 40);
+		}
+	} else if (gameState == gameStates.WAIT) {
+		g.font = "50px Consolas";
+		g.fillStyle = "#222222";
+		g.fillText("Click to start", 500 - "Click to start".visualLength()*50/32, height/2);
+	} else if (gameState == gameStates.GAMEOVER) {
+		g.font = "50px Consolas";
+		g.fillStyle = "#222222";
+		g.fillText("Game Over!", 500 - "Game Over!".visualLength()*50/32, height/2);
+		
+		g.font = "20px Consolas";
+		scoreMsg = "Your score: " + score;
+		g.fillText(scoreMsg, 500 - scoreMsg.visualLength()*20/32, height/2+30);
+		
+		g.fillText("Click to try again", 500 - "Click to try again".visualLength()*20/32, height/2+60);
 	}
-	if (fireDelay > 0) fireDelay--;
-	if (mouse.click != 0) triggerReleased = true;
-	
-	if (debugUI) {
-		g.fillStyle = "#444"
-		g.font = "10px Consolas";
-		g.fillText("KeyHeld: " + (heldKeys.length > 0 ? heldKeys : "none"), 5, 10);
-		g.fillText("MouseClick: " + (mouse.click != -1 ? mouse.click : "none"), 5, 20);
-		g.fillText("MousePos: " + mouse.x + " - " + mouse.y, 5, 30);
-		g.fillText("FireDelay: " + fireDelay, 5, 40);
-	}
 }
 
-// ## BACKGROUND METHOD ##
-
-function background(c) {
-	this.g.fillStyle = c;
-	this.g.fillRect(0, 0, this.width, this.height);
-}
-
-// ## SPRITE FROM LOCAL IMAGE ##
-
-function sprite(src) {
-	var img = new Image();
-	img.src = src;
-	return img;
-}
+// ## SHOOT ##
 
 function shoot(x, y) {
 	fireDelay = maxFireDelay;
 	new Audio("res/sound/gunshot.wav").play();
 	
-	cans.forEach(function(e) {
-		var vs = [
-			[Math.cos(e.a)*10-Math.sin(e.a)*20+e.x,Math.sin(e.a)*10+Math.cos(e.a)*20+e.y],
-			[Math.cos(e.a)*10+Math.sin(e.a)*20+e.x,Math.sin(e.a)*10-Math.cos(e.a)*20+e.y],
-			[-Math.cos(e.a)*10+Math.sin(e.a)*20+e.x,-Math.sin(e.a)*10-Math.cos(e.a)*20+e.y],
-			[-Math.cos(e.a)*10-Math.sin(e.a)*20+e.x,-Math.sin(e.a)*10+Math.cos(e.a)*20+e.y]
-		];
-		if (inside(mouse.x, mouse.y, vs)) {
-			new Audio("res/sound/bang.wav").play();
-			e.vx = random(-1,1);
-			e.vy = random(-3,-1);
-			e.va = random(-0.1, 0.1);
-			score++;
-		}
-	});
+	var vs = [
+		[Math.cos(c.a)*10-Math.sin(c.a)*20+c.x,Math.sin(c.a)*10+Math.cos(c.a)*20+c.y],
+		[Math.cos(c.a)*10+Math.sin(c.a)*20+c.x,Math.sin(c.a)*10-Math.cos(c.a)*20+c.y],
+		[-Math.cos(c.a)*10+Math.sin(c.a)*20+c.x,-Math.sin(c.a)*10-Math.cos(c.a)*20+c.y],
+		[-Math.cos(c.a)*10-Math.sin(c.a)*20+c.x,-Math.sin(c.a)*10+Math.cos(c.a)*20+c.y]
+	];
+	if (inside(mouse.x, mouse.y, vs)) {
+		new Audio("res/sound/bang.wav").play();
+		c.vx = random(-1,1);
+		c.vy = random(-3,-1);
+		c.va = random(-0.1, 0.1);
+		score++;
+	}
 }
 
-function inside(x, y, vs) {
-    var inside = false;
-    for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-        var xi = vs[i][0], yi = vs[i][1];
-        var xj = vs[j][0], yj = vs[j][1];
-
-        var intersect = ((yi > y) != (yj > y))
-            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-
-    return inside;
-}
-
-function random(a, b) {
-	return Math.random()*(b-a)+a
-}
-
-String.prototype.visualLength = function() {
-    var ruler = document.getElementById("ruler");
-    ruler.innerHTML = this;
-    return ruler.offsetWidth;
-}
