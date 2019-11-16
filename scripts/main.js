@@ -80,10 +80,10 @@ function update() {
 	render();
 	
 	if (gameState == gameStates.WAIT || gameState == gameStates.GAMEOVER){
-		document.body.style.cursor = "auto";
+		document.getElementById("frame").style.cursor = "auto";
 		if (mouse.click == 0 && !mouseOut) startGame();
 	} else if (gameState == gameStates.PLAYING) {
-		document.body.style.cursor = "none";
+		document.getElementById("frame").style.cursor = "none";
 		c.update();
 		if (c.y > height + 30) gameOver();
 		
